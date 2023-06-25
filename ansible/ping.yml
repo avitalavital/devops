@@ -1,0 +1,7 @@
+---
+- name: Ping all instances
+  hosts: all
+  become: true
+  tasks:
+    - name: Ping
+      ping:

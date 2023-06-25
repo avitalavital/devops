@@ -1,0 +1,10 @@
+---
+- name: Add test-user to all instances
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Create test-user
+      user:
+        name: my_user
+        state: present
