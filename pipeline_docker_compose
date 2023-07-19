@@ -1,0 +1,102 @@
+pipeline {
+    agent any
+    //enter your ip here
+    environment {
+        TEST_SRV_IP = '13.53.142.179'
+        PROD_SRV_IP = '16.171.138.12'
+    }
+
+    stages {
+        stage('Cleanup') {
+            steps {
+                //delete everything from the working directory
+                sh 'rm -rf *'
+            }
+        }
+        stage('Clone') {
+            steps {
+                //get the flask project from github
+                sh 'git clone https://github.com/avitalavital/flask.git'
+            }
+        }
+
+        stage('build') {
+            steps {
+                //mini clean up
+                sh 'docker image prune -a'
+                sh 'docker container prune -f'
+                //build a docker image
+                sh 'cd flask && docker build -t avital1093/flask_project:latest .'
+            }
+        }
+        stage('push to docker hub') {
+            steps {
+                //avoid exposing your credentials
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh "docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD} "
+                    // push the image to dicker hub
+                    sh 'docker push avital1093/flask_project'
+                }
+            }
+        }
+        stage('prep test srv') {
+            steps {
+                script {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no -i /var/lib/jenkins/.ssh/my_key_pair.pem ec2-user@${TEST_SRV_IP} '
+                    whoami
+                    sudo yum install git
+                    cd ~ && git clone https://github.com/avitalavital/flask.git
+                    sudo yum install docker -y
+                    sudo systemctl enable docker
+                    sudo systemctl start docker
+                    sudo yum install docker-compose -y
+                    //get reade of leftovers from previos runnings 
+                    sudo docker stop \$(sudo docker ps -aq)
+                    sudo docker rm \$(sudo docker ps -aq)
+                    sudo docker rmi \$(sudo docker images -q)
+                    cd ~/flask && sudo docker-compose up -d
+                    '
+                    """
+                }
+            }
+        }
+
+        stage('Testing') {
+            steps {
+                script {
+                    //get the response code from the flask
+                    def response = sh(returnStdout: true, script: "curl -s -o /dev/null -w '%{http_code}' http://${TEST_SRV_IP}:5000")
+                    //check if its available 
+                    if (response.trim() == '200') {
+                        echo 'Flask app returned a 200 status code. Test passed!'
+                    } else {
+                        echo "Flask app returned a non-200 status code: ${response.trim()}. Test failed!"
+                        error('Test failed!') // Abort the pipeline with an error status
+                    }
+                }
+            }
+        }
+
+        stage('deploy to prod') {
+            steps {
+                script {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no -i /var/lib/jenkins/.ssh/my_key_pair.pem ec2-user@${PROD_SRV_IP} '
+                    //install docker on the instance
+                    sudo yum install docker -y
+                    sudo systemctl enable docker
+                    sudo systemctl start docker
+                    //get reade of leftovers from previos runnings
+                    sudo docker stop \$(sudo docker ps -aq)
+                    sudo docker rm \$(sudo docker ps -aq)
+                    sudo docker rmi \$(sudo docker images -q)
+                    //run the docker
+                    sudo docker run -d -p 5000:5000 avital1093/flask_project
+                    '
+                    """
+                }
+            }
+        }
+    }
+}
