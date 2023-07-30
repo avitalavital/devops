@@ -35,13 +35,52 @@ resource "aws_instance" "prod" {
 output "public_ip_prod" {
   value = aws_instance.prod.public_ip
 }
-# Create a local file to write the public IP address
-resource "local_file" "public_ip_test_file" {
-  filename = "public_ip_test.txt"
-  content  = aws_instance.test.public_ip
+# Create a local file to write both public and private IP addresses
+resource "local_file" "ip_addresses_file" {
+  filename = "ip_addresses.txt"
+  content = <<-EOT
+    Public IP: ${aws_instance.test.public_ip}
+    Private IP: ${aws_instance.prod.public_ip}
+  EOT
 }
-# Create a local file to write the public IP address
-resource "local_file" "public_ip_prod_file" {
-  filename = "public_ip_prod.txt"
-  content  = aws_instance.prod.public_ip
+resource "aws_key_pair" "terraform_key_pair" {
+  key_name   = "terraform_key_pair"
+  public_key = file("~/.ssh/terraform_key_pair.pub")
+}
+resource "aws_security_group" "terraform" {
+  name        = "terraform-security-group"  # Replace with your desired name for the security group
+  description = "terraform security group created by Terraform"
+
+  # Inbound rules
+  ingress {
+    description = "Allow SSH access"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Allow SSH access from any IP address (Note: This is not recommended for production)
+  }
+
+  ingress {
+    description = "Allow HTTP access"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Allow HTTP access from any IP address (Note: This is not recommended for production)
+  }
+ingress {
+    description = "Allow HTTPS access"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Allow HTTP access from any IP address (Note: This is not recommended for production)
+  }
+
+  # Outbound rules (optional)
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
