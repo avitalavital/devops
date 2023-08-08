@@ -37,6 +37,14 @@ resource "aws_security_group" "terraform" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "Allow HTTP access"
+    from_port   = 5000
+    to_port     = 5000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   # Outbound rules (optional)
   egress {
     description = "Allow all outbound traffic"
@@ -69,6 +77,11 @@ resource "aws_instance" "test" {
       "sudo yum install -y nginx",
       "sudo systemctl start nginx",
       "sudo systemctl enable nginx",
+      "sudo yum install -y docker",
+      "sudo systemctl start docker",
+      "sudo systemctl enable docker",
+      "sudo usermod -aG docker ec2-user",
+      "sudo docker run -d -p 5000:5000 avital1093/flask_project",
     ]
   }
 
@@ -110,6 +123,12 @@ resource "aws_instance" "prod" {
       "sudo yum install -y nginx",
       "sudo systemctl start nginx",
       "sudo systemctl enable nginx",
+      "sudo yum install -y docker",
+      "sudo systemctl start docker",
+      "sudo systemctl enable docker",
+      "sudo usermod -aG docker ec2-user",
+      "sudo docker run -d -p 5000:5000 avital1093/flask_project",
+
     ]
   }
 
